@@ -8,6 +8,10 @@ import { shouldAutoApprove } from '@/lib/autoApprove'
 import { checkContent } from '@/lib/contentCheck'
 import { sendPendingAlert } from '@/lib/email'
 import { getAlertSettings } from '@/lib/alertSettings'
+import { getImageModerationProvider, moderateImages, type ModerationImage } from '@/lib/imageModeration'
+
+/** PostgREST / Postgres "column does not exist": migration 20261015140000 not applied yet. */
+const MISSING_COLUMN_CODES = new Set(['PGRST204', '42703'])
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,6 +43,7 @@ export async function POST(request: NextRequest) {
     // ── Upload validated photos to storage ────────────────────────────────────
     const supabase = createServerClient()
     const photoUrls: string[] = []
+    const storedPhotos: ModerationImage[] = []
 
     for (const { buffer, mimeType, ext } of fileCheck.validated) {
       const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
@@ -55,6 +60,7 @@ export async function POST(request: NextRequest) {
           data: { publicUrl },
         } = supabase.storage.from('submission-photos').getPublicUrl(uploadData.path)
         photoUrls.push(publicUrl)
+        storedPhotos.push({ buffer, mimeType })
       }
     }
 
@@ -64,17 +70,27 @@ export async function POST(request: NextRequest) {
       console.warn('Content flagged for review:', contentCheck.flaggedFields.join(', '))
     }
 
+    // ── Image moderation ───────────────────────────────────────────────────────
+    // Every stored photo must pass before the submission can auto-publish.
+    // No provider, a provider error, a timeout or a flagged photo all queue
+    // the submission for human review; nothing is auto-rejected.
+    const moderation = await moderateImages(storedPhotos, getImageModerationProvider())
+    if (!moderation.passed) {
+      console.warn('[moderation] queued for review:', moderation.reasons.join('; '))
+    }
+
     // ── Determine approval status ──────────────────────────────────────────────
     const approvalResult = shouldAutoApprove(data, photoUrls.length)
     const pendingReasons = [
       ...approvalResult.reasons,
       ...(contentCheck.flagged ? ['Content flagged for review'] : []),
+      ...moderation.reasons,
     ]
-    const autoApproved = approvalResult.approved && !contentCheck.flagged
+    const autoApproved = approvalResult.approved && !contentCheck.flagged && moderation.passed
     const status = autoApproved ? 'approved' : 'pending'
 
     // ── Persist to database ───────────────────────────────────────────────────
-    const { data: inserted, error: dbError } = await supabase.from('submissions').insert({
+    const row = {
       address: data.address,
       description: data.description,
       cross_streets: data.cross_streets,
@@ -87,7 +103,18 @@ export async function POST(request: NextRequest) {
       submitter_email: data.submitter_email,
       photos: photoUrls,
       status,
-    }).select('id').single()
+    }
+    let insertResult = await supabase
+      .from('submissions')
+      .insert({ ...row, review_reasons: status === 'pending' ? pendingReasons : null })
+      .select('id')
+      .single()
+    if (insertResult.error && MISSING_COLUMN_CODES.has(insertResult.error.code)) {
+      // Deploy-order safety: the code can land before migration 20261015140000.
+      console.warn('[submissions] review_reasons column missing; apply migration 20261015140000. Inserting without it.')
+      insertResult = await supabase.from('submissions').insert(row).select('id').single()
+    }
+    const { data: inserted, error: dbError } = insertResult
 
     if (dbError) {
       console.error('DB insert error:', dbError)

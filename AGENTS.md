@@ -7,8 +7,10 @@ touching code. `CLAUDE.md` and `.github/copilot-instructions.md` both point here
 
 Greenwich Utility Watch is a community reporting tool for utility pole problems in Greenwich, CT.
 Residents submit photos and a short description from their phone. Submissions that pass the automated
-quality and content checks in `lib/autoApprove.ts` are published immediately; everything else queues
-for a single admin to review, with one-tap approve/reject links by email.
+quality checks in `lib/autoApprove.ts`, the text filter in `lib/contentCheck.ts` and image moderation
+of every photo in `lib/imageModeration.ts` are published immediately; everything else queues
+for a single admin to review, with one-tap approve/reject links by email and the reasons shown on the
+dashboard. Without `OPENAI_API_KEY` nothing with a photo is auto-published (see `docs-dev/MODERATION.md`).
 Public surfaces: submission form (`/`), gallery (`/gallery`), impact dashboard (`/dashboard`),
 about (`/about`), press kit (`/press`), per-report permalinks (`/poles/<id>`), RSS (`/feed.xml`) and
 JSON/CSV export (`/data/reports.json`, `/data/reports.csv`). Admin: `/admin` login, `/admin/dashboard` review queue.
@@ -24,6 +26,7 @@ Live at https://greenwichutilitywatch.org.
 | Data + files | Supabase (Postgres + Storage) via `@supabase/supabase-js` | anon role is read-only, see security rules |
 | Email | Resend + `@react-email/components` | `lib/email.ts` |
 | Content filter | `obscenity` | `lib/contentCheck.ts` |
+| Image moderation | OpenAI `omni-moderation-latest` (plain `fetch`, no SDK) | `lib/imageModeration.ts`; fail-safe to the review queue when unconfigured, erroring or slow |
 | Tests | Vitest 5, node environment | `__tests__/lib/`, `lib/*.test.ts` |
 | Lint | ESLint 10 flat config, `eslint-config-next` | `eslint.config.mjs` (`next lint` no longer exists) |
 | Hosting | Vercel (Node 24.x), Vercel Analytics, Vercel Cron | `vercel.json` |
@@ -61,6 +64,14 @@ Required for a build: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY
 `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_PASSWORD`, `ADMIN_SECRET`. In Codespaces / any devcontainer
 the `postAttachCommand` prints these steps.
 
+Image moderation (optional, but production should have it): `OPENAI_API_KEY` enables the
+OpenAI moderation provider that checks every uploaded photo before auto-publish. When it is unset,
+every submission with photos queues for review with the reason "Image moderation not configured";
+nothing is auto-published unchecked. `IMAGE_MODERATION_THRESHOLDS` (optional JSON) tightens
+per-category score thresholds. Enable in production with
+`vercel env add OPENAI_API_KEY production --scope practicalsystems-projects` from the linked repo
+directory, then redeploy. Details, thresholds and failure modes: `docs-dev/MODERATION.md`.
+
 ## Infrastructure
 
 - **Vercel**: team `practicalsystems-projects`, project `greenwich-utility-watch` (the names `vercel link`
@@ -88,7 +99,7 @@ app/                       App Router routes. app/api/** are the ONLY writers to
   badge.svg/ badge/        embeddable live badge (CDN-cached SVG) + embed page
   feed.xml/ data/          RSS feed and JSON/CSV export route handlers (revalidate = 300)
   admin/                   login page + review dashboard
-  api/submissions          POST: validate → quarantine → upload → auto-approve or queue
+  api/submissions          POST: validate → quarantine → upload → image moderation → auto-approve or queue
   api/admin/**             login / logout / settings / submission status (session cookie)
   api/submissions/[id]/quick-action   signed one-tap approve/reject from email
   api/cron/digest          daily digest
@@ -99,6 +110,7 @@ app/                       App Router routes. app/api/** are the ONLY writers to
   reports/ reports/[month] monthly report index + page (snapshot or live view); reports/feed.xml RSS
 components/                client components (SubmissionForm, GalleryView, AdminDashboard, map, charts)
 lib/                       all business logic, unit-tested: validate, fileQuarantine, contentCheck,
+                           imageModeration (provider interface + OpenAI adapter + fail-safe decision),
                            autoApprove, sessions, rateLimit, quickActionToken, email, notify, supabase,
                            publicReport (public column list + derived fields; every public surface goes
                            through it), publicData (the one Supabase loader for public pages),
@@ -139,8 +151,11 @@ next.config.js             CSP + security headers, image remotePatterns
   Router, image optimizer, server actions, etc.) before treating it as exploitable. Upgrade anyway
   when it is cheap.
 - **Notification principle**: alert the admin only on items that need human judgment. Auto-approval
-  handles the bulk, the content filter catches bad content, the daily digest is the audit trail.
-  Do not add notifications that fire on every submission.
+  handles the bulk, the content filter and image moderation catch bad content, the daily digest is
+  the audit trail. Do not add notifications that fire on every submission.
+- **No photo is auto-published without passing image moderation.** A missing provider, a provider
+  error, a timeout or a flagged photo all queue for review; moderation never auto-rejects. Keep both
+  halves of that rule (`lib/imageModeration.ts`, `docs-dev/MODERATION.md`).
 - Admin auth is one password plus an HMAC-signed, httpOnly session cookie (`lib/sessions.ts`,
   7-day expiry). Rotating `ADMIN_SECRET` invalidates every session. No user system, by design.
 - Rate limits live in `lib/rateLimit.ts`; change them there, not in route handlers.

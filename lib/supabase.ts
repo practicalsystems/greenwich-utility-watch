@@ -21,6 +21,9 @@ export type Submission = {
   reported_at?: string | null
   official_response?: string | null
   resolved_at?: string | null
+  // Why auto-approval failed, added by migration 20261015140000; absent until applied,
+  // null for auto-approved rows. Admin-only (not in the anon column grant).
+  review_reasons?: string[] | null
 }
 
 /** Format a display-friendly location string for submissions that may lack an address. */

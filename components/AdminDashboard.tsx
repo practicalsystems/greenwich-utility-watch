@@ -442,6 +442,11 @@ export default function AdminDashboard({ initialSubmissions, subscriberCount = 0
                         </p>
                       )}
                       <p className="text-xs text-slate-600 mt-1 line-clamp-2">{sub.description}</p>
+                      {sub.status === 'pending' && sub.review_reasons && sub.review_reasons.length > 0 && (
+                        <p className="text-xs text-amber-700 mt-1">
+                          <span className="font-medium">Needs review:</span> {sub.review_reasons.join(' · ')}
+                        </p>
+                      )}
                       <div className="flex items-center justify-between mt-2.5 gap-2 flex-wrap">
                         <p className="text-xs text-slate-400">
                           {format(parseISO(sub.created_at), 'MMM d, yyyy h:mm a')}
@@ -547,6 +552,16 @@ export default function AdminDashboard({ initialSubmissions, subscriberCount = 0
               )}
 
               <dl className="space-y-2 text-sm mb-4">
+                {selected.review_reasons && selected.review_reasons.length > 0 && (
+                  <div className="flex gap-2">
+                    <dt className="text-slate-400 w-24 shrink-0">Why queued</dt>
+                    <dd>
+                      <ul className="list-disc pl-4 text-amber-700">
+                        {selected.review_reasons.map((r) => <li key={r}>{r}</li>)}
+                      </ul>
+                    </dd>
+                  </div>
+                )}
                 {selected.problem_type && (
                   <div className="flex gap-2">
                     <dt className="text-slate-400 w-24 shrink-0">Problem</dt>
