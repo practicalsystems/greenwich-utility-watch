@@ -24,7 +24,7 @@
     "obscenity": "^0.4.6",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-leaflet": "^4.2.1",
+    "react-leaflet": "^5.0.0",
     "recharts": "^2.12.7",
     "resend": "^6.33.0"
   },
