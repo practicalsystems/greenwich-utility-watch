@@ -23,7 +23,8 @@ submission; the admin always makes that call.
 | Provider returns non-2xx, network error, malformed body | queued | `Image moderation unavailable (OpenAI 401)` etc. |
 | Provider does not answer within 5 s (`MODERATION_TIMEOUT_MS`) | queued | `Image moderation unavailable (timed out after 5000 ms)` |
 | Any photo trips a failing category | queued | `Photo 2 flagged by image moderation (sexual, violence/graphic)` |
-| Every photo passes | eligible for auto-approval | – |
+| Any photo is not JPEG or PNG (GIF, WebP, HEIC) | queued | `Photo 2 is image/gif; only JPEG and PNG are auto-published` |
+| Every photo passes and is JPEG or PNG | eligible for auto-approval | – |
 | No photos | moderation is a no-op | (already queued by `autoApprove`: "No photo attached") |
 
 The safe default is the first row: with no key configured, **nothing with a
@@ -70,6 +71,13 @@ They are deliberately conservative for a public gallery of utility poles: a
 false positive costs the admin one tap, a false negative is an offensive photo
 on a civic site. `violence` is the loosest because downed wires, sparks and
 storm damage can score there without being graphic.
+
+Only single-frame formats auto-publish (`AUTO_PUBLISH_MIME_TYPES`: JPEG,
+PNG). GIF and WebP can carry several frames; a classifier scores one of them
+while the gallery plays all of them, so a clean first frame would be a bypass.
+Those formats are still moderated (a flag is reported too) but always go to
+a human. The form re-encodes every photo to JPEG on the phone, so this only
+affects direct posts to the API.
 
 HEIC never reaches the server from the form (`lib/compressImage.ts` re-encodes
 to JPEG on the phone). A HEIC posted directly to the API is accepted by

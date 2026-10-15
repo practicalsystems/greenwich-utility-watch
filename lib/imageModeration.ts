@@ -265,6 +265,15 @@ export const MODERATION_TIMEOUT_MS = 5000
 
 export const NOT_CONFIGURED_REASON = 'Image moderation not configured'
 
+/**
+ * Formats that may auto-publish. GIF and WebP can carry several frames and a
+ * classifier sees one of them while the gallery plays all of them, so those
+ * (and anything else quarantine accepts, e.g. HEIC) always go to a human.
+ * The submission form re-encodes every photo to JPEG on the phone, so this
+ * only affects direct posts to the API.
+ */
+export const AUTO_PUBLISH_MIME_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png'])
+
 export interface ImageModerationDecision {
   /** true only when every photo passed, or there were no photos to check. */
   passed: boolean
@@ -291,6 +300,9 @@ export async function moderateImages(
   const reasons: string[] = []
   verdicts.forEach((verdict, i) => {
     const label = images.length === 1 ? 'Photo' : `Photo ${i + 1}`
+    if (!AUTO_PUBLISH_MIME_TYPES.has(images[i].mimeType)) {
+      reasons.push(`${label} is ${images[i].mimeType}; only JPEG and PNG are auto-published`)
+    }
     if (verdict.outcome === 'flagged') {
       reasons.push(`${label} flagged by image moderation (${verdict.categories.join(', ')})`)
     } else if (verdict.outcome === 'error') {

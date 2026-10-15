@@ -108,6 +108,28 @@ describe('moderateImages — decision logic', () => {
     expect(aborted).toBe(true)
   })
 
+  it('never auto-publishes multi-frame formats (GIF, WebP) even when the provider passes them', async () => {
+    const gif: ModerationImage = { buffer: Buffer.from('GIF89a'), mimeType: 'image/gif' }
+    const webp: ModerationImage = { buffer: Buffer.from('RIFF....WEBP'), mimeType: 'image/webp' }
+    const provider = scriptedProvider([{ outcome: 'pass' }, { outcome: 'pass' }, { outcome: 'pass' }])
+    const decision = await moderateImages([JPEG, gif, webp], provider)
+    expect(decision.passed).toBe(false)
+    expect(decision.reasons).toEqual([
+      'Photo 2 is image/gif; only JPEG and PNG are auto-published',
+      'Photo 3 is image/webp; only JPEG and PNG are auto-published',
+    ])
+  })
+
+  it('still reports a provider flag on a multi-frame format alongside the format reason', async () => {
+    const gif: ModerationImage = { buffer: Buffer.from('GIF89a'), mimeType: 'image/gif' }
+    const provider = scriptedProvider([{ outcome: 'flagged', categories: ['sexual'] }])
+    const decision = await moderateImages([gif], provider)
+    expect(decision.reasons).toEqual([
+      'Photo is image/gif; only JPEG and PNG are auto-published',
+      'Photo flagged by image moderation (sexual)',
+    ])
+  })
+
   it('collapses identical unavailable reasons across photos', async () => {
     const provider = scriptedProvider([
       { outcome: 'error', message: 'OpenAI 503' },
