@@ -10,16 +10,54 @@ updates:
       npm-minor-and-patch:
         update-types: [minor, patch]
     ignore:
+      # Major versions of the packages below are deliberate migrations, taken
+      # on a branch with the full CI sequence and a rendered /dashboard check,
+      # not weekly PRs. Minors and patches still arrive in the grouped PR.
+      # To take a major on purpose: delete its rule here, merge that change,
+      # and Dependabot opens the PR on its next weekly run (or comment
+      # `@dependabot recreate` on the old PR).
+
       # Tailwind 4 is deliberately deferred: it raises the browser floor to
       # Safari 16.4 / Chrome 111 / Firefox 128, and this is a phone-first
       # tool with no visual tests. Tracking issue, trial diff and the unblock
-      # criteria: https://github.com/practicalsystems/greenwich-utility-watch/issues/20
+      # criteria: https://github.com/practicalsystems/greenwich-utility-watch-archive/issues/20
       # Remove this rule when that issue is closed.
       - dependency-name: tailwindcss
         update-types: ["version-update:semver-major"]
       # @types/node tracks the Node runtime (24.x on Vercel, CI and the
       # devcontainer). Bump it by hand when the runtime moves, not before.
       - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # React and its type packages move together with react-leaflet, whose
+      # majors pin a React major (react-leaflet 5 = React 19). Taken as one
+      # coupled upgrade; see the 2026-10-15 React 19 PR.
+      - dependency-name: react
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-dom
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-is
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: react-leaflet
+        update-types: ["version-update:semver-major"]
+      # Recharts majors change chart rendering (axes, tooltips, defaults);
+      # /dashboard and the admin chart are checked by eye, not by tests.
+      - dependency-name: recharts
+        update-types: ["version-update:semver-major"]
+      # TypeScript 7 is the native (Go) compiler with no programmatic API yet.
+      # typescript-eslint, which eslint-config-next depends on, accepts
+      # TypeScript < 6.1 only, so `npm run lint` fails outright on 7.x.
+      # Revisit when https://github.com/typescript-eslint/typescript-eslint/issues/10940
+      # closes and eslint-config-next picks that release up.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # Vitest and its coverage provider share a major and an exact peer.
+      - dependency-name: vitest
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/coverage-v8"
         update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /

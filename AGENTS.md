@@ -22,7 +22,7 @@ Live at https://greenwichutilitywatch.org.
 |---|---|---|
 | Framework | Next.js 16 (App Router, Turbopack) | `proxy.ts` is Next 16's name for middleware; it gates `/admin/dashboard` |
 | Language | TypeScript 5, `strict: true` | path alias `@/*` → repo root |
-| UI | React 18, Tailwind CSS 3, Leaflet / react-leaflet, Recharts | Tailwind 4 deliberately deferred (browser floor); see `.github/dependabot.yml` |
+| UI | React 19, Tailwind CSS 3, Leaflet / react-leaflet 5, Recharts 3 | Majors of react, react-leaflet, recharts, typescript, tailwindcss and vitest are deliberate migrations, not weekly Dependabot PRs; Tailwind 4 deferred (browser floor); see `.github/dependabot.yml` |
 | Data + files | Supabase (Postgres + Storage) via `@supabase/supabase-js` | anon role is read-only, see security rules |
 | Email | Resend + `@react-email/components` | `lib/email.ts` |
 | Content filter | `obscenity` | `lib/contentCheck.ts` |
