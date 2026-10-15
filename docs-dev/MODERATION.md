@@ -24,6 +24,7 @@ submission; the admin always makes that call.
 | Provider does not answer within 5 s (`MODERATION_TIMEOUT_MS`) | queued | `Image moderation unavailable (timed out after 5000 ms)` |
 | Any photo trips a failing category | queued | `Photo 2 flagged by image moderation (sexual, violence/graphic)` |
 | Any photo is not JPEG or PNG (GIF, WebP, HEIC) | queued | `Photo 2 is image/gif; only JPEG and PNG are auto-published` |
+| Any photo is an animated PNG (`acTL` chunk) | queued | `Photo 2 is an animated PNG; only single-frame images are auto-published` |
 | Every photo passes and is JPEG or PNG | eligible for auto-approval | – |
 | No photos | moderation is a no-op | (already queued by `autoApprove`: "No photo attached") |
 
@@ -76,7 +77,9 @@ Only single-frame formats auto-publish (`AUTO_PUBLISH_MIME_TYPES`: JPEG,
 PNG). GIF and WebP can carry several frames; a classifier scores one of them
 while the gallery plays all of them, so a clean first frame would be a bypass.
 Those formats are still moderated (a flag is reported too) but always go to
-a human. The form re-encodes every photo to JPEG on the phone, so this only
+a human. An animated PNG keeps the plain PNG signature, so `isAnimatedPng()`
+looks for the `acTL` chunk ahead of the first `IDAT` and queues it the same
+way. The form re-encodes every photo to JPEG on the phone, so this only
 affects direct posts to the API.
 
 HEIC never reaches the server from the form (`lib/compressImage.ts` re-encodes

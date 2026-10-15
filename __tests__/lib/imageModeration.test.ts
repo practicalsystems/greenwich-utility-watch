@@ -8,6 +8,7 @@ import {
   createOpenAIImageModerationProvider,
   failingCategories,
   getImageModerationProvider,
+  isAnimatedPng,
   moderateImages,
   parseThresholds,
   type ImageModerationProvider,
@@ -118,6 +119,25 @@ describe('moderateImages — decision logic', () => {
       'Photo 2 is image/gif; only JPEG and PNG are auto-published',
       'Photo 3 is image/webp; only JPEG and PNG are auto-published',
     ])
+  })
+
+  it('never auto-publishes an animated PNG (acTL before IDAT) but accepts a plain PNG', async () => {
+    const sig = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+    const chunk = (type: string) => Buffer.concat([Buffer.from([0, 0, 0, 0]), Buffer.from(type, 'latin1')])
+    const apng: ModerationImage = {
+      buffer: Buffer.concat([Buffer.from(sig), chunk('IHDR'), chunk('acTL'), chunk('IDAT')]),
+      mimeType: 'image/png',
+    }
+    const png: ModerationImage = {
+      buffer: Buffer.concat([Buffer.from(sig), chunk('IHDR'), chunk('IDAT'), Buffer.from('acTL in pixel data', 'latin1')]),
+      mimeType: 'image/png',
+    }
+    expect(isAnimatedPng(apng.buffer)).toBe(true)
+    expect(isAnimatedPng(png.buffer)).toBe(false)
+    const provider = scriptedProvider([{ outcome: 'pass' }, { outcome: 'pass' }])
+    const decision = await moderateImages([png, apng], provider)
+    expect(decision.passed).toBe(false)
+    expect(decision.reasons).toEqual(['Photo 2 is an animated PNG; only single-frame images are auto-published'])
   })
 
   it('still reports a provider flag on a multi-frame format alongside the format reason', async () => {

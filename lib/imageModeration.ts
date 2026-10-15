@@ -274,6 +274,29 @@ export const NOT_CONFIGURED_REASON = 'Image moderation not configured'
  */
 export const AUTO_PUBLISH_MIME_TYPES: ReadonlySet<string> = new Set(['image/jpeg', 'image/png'])
 
+/**
+ * An animated PNG keeps the plain PNG signature, so quarantine reports it as
+ * image/png, yet browsers play every frame. Its `acTL` chunk must precede
+ * the first `IDAT`; a loose scan of the chunk headers is enough here because
+ * a false positive only costs the admin one tap.
+ */
+export function isAnimatedPng(buffer: Buffer): boolean {
+  const idat = buffer.indexOf('IDAT', 8, 'latin1')
+  const actl = buffer.indexOf('acTL', 8, 'latin1')
+  return actl !== -1 && (idat === -1 || actl < idat)
+}
+
+/** Why an image may not auto-publish regardless of what the classifier says, or null. */
+export function formatReason(image: ModerationImage): string | null {
+  if (!AUTO_PUBLISH_MIME_TYPES.has(image.mimeType)) {
+    return `is ${image.mimeType}; only JPEG and PNG are auto-published`
+  }
+  if (image.mimeType === 'image/png' && isAnimatedPng(image.buffer)) {
+    return 'is an animated PNG; only single-frame images are auto-published'
+  }
+  return null
+}
+
 export interface ImageModerationDecision {
   /** true only when every photo passed, or there were no photos to check. */
   passed: boolean
@@ -300,9 +323,8 @@ export async function moderateImages(
   const reasons: string[] = []
   verdicts.forEach((verdict, i) => {
     const label = images.length === 1 ? 'Photo' : `Photo ${i + 1}`
-    if (!AUTO_PUBLISH_MIME_TYPES.has(images[i].mimeType)) {
-      reasons.push(`${label} is ${images[i].mimeType}; only JPEG and PNG are auto-published`)
-    }
+    const format = formatReason(images[i])
+    if (format) reasons.push(`${label} ${format}`)
     if (verdict.outcome === 'flagged') {
       reasons.push(`${label} flagged by image moderation (${verdict.categories.join(', ')})`)
     } else if (verdict.outcome === 'error') {
