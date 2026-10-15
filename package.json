@@ -39,7 +39,7 @@
     "libpg-query": "18.1.5",
     "postcss": "^8.4.40",
     "tailwindcss": "^3.4.6",
-    "typescript": "^5.5.4",
+    "typescript": "^7.0.2",
     "vitest": "^5.0.4"
   }
 }
