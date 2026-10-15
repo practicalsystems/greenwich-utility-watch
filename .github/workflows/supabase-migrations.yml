@@ -1,0 +1,133 @@
+# Supabase schema migrations as code.
+#
+# Two jobs:
+#   validate  every PR and every push to main that touches supabase/**:
+#             file-name check + Postgres-grammar parse (scripts/check-migrations.mjs),
+#             then a real apply of every migration to a throwaway Postgres 17 via
+#             `supabase db start`, followed by `supabase db lint --local`.
+#             Needs no secrets, so it runs on forks and on PRs.
+#   deploy    push to main (or manual dispatch) only, and only when the three
+#             deploy secrets exist: `supabase link` + `supabase db push`.
+#             Skipped, not failed, when the secrets are absent.
+#
+# Operator setup (one time, see supabase/README.md):
+#   Secrets  SUPABASE_ACCESS_TOKEN   personal access token, scoped to this project
+#            SUPABASE_DB_PASSWORD    the project's database password
+#   Var      SUPABASE_PROJECT_ID     repository variable (project ref; not secret, set below)
+#
+# `supabase db push` only applies migrations missing from the remote history
+# table, so re-runs are no-ops. The baseline (20260316000000) must be marked
+# applied with `supabase migration repair` before the first push; if it is not,
+# the baseline is written to be idempotent and will simply no-op.
+
+name: Supabase migrations
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/config.toml'
+      - '.github/workflows/supabase-migrations.yml'
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - 'scripts/check-migrations.mjs'
+      - '.github/workflows/supabase-migrations.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never run two pushes against production at once; let a queued run wait.
+concurrency:
+  group: supabase-migrations-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  # Pin the CLI so CI and the operator's `npx supabase@<version>` agree.
+  # Bump deliberately; check the changelog at https://github.com/supabase/cli/releases
+  SUPABASE_CLI_VERSION: 2.121.0
+
+jobs:
+  validate:
+    name: Validate migrations
+    runs-on: ubuntu-latest
+    outputs:
+      has_deploy_secrets: ${{ steps.secrets.outputs.present }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Check file names and parse SQL
+        run: npm run db:check
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Apply every migration to a fresh local Postgres 17
+        # `db start` boots the database container from supabase/config.toml and
+        # applies supabase/migrations in order. A migration that fails fails here.
+        run: supabase db start
+
+      - name: Show what was applied
+        run: supabase migration list --local
+
+      - name: Lint the resulting schema
+        run: supabase db lint --local --level warning --fail-on error
+
+      - name: Detect deploy secrets
+        id: secrets
+        # Job-level `if:` cannot read the secrets context, so surface presence
+        # as an output. On forks and pull_request events these are empty.
+        env:
+          ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          if [ -n "$ACCESS_TOKEN" ] && [ -n "$DB_PASSWORD" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::SUPABASE_ACCESS_TOKEN and/or SUPABASE_DB_PASSWORD are not set; migrations were validated but not pushed."
+          fi
+
+  deploy:
+    name: Push migrations to production
+    needs: validate
+    if: >-
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main'
+      && github.repository == 'practicalsystems/greenwich-utility-watch'
+      && needs.validate.outputs.has_deploy_secrets == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: supabase/setup-cli@v3
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+
+      - name: Link to the hosted project
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Preview pending migrations
+        run: supabase db push --dry-run
+
+      - name: Push pending migrations
+        run: supabase db push
+
+      - name: Confirm remote history
+        run: supabase migration list --linked

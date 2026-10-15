@@ -1,0 +1,21 @@
+{
+  "name": "greenwich-utility-watch",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:24-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "Next.js dev server", "onAutoForward": "notify" }
+  },
+  "postCreateCommand": "npm ci && npm i -g vercel@latest",
+  "postAttachCommand": "echo '' && echo '=== greenwich-utility-watch ===' && echo 'Secrets live in Vercel. To get dev secrets:' && echo '  1. vercel login' && echo '  2. vercel link --yes --project greenwich-utility-watch --scope practicalsystems-projects' && echo '  3. vercel env pull .env.local' && echo 'Then: npm run dev  (port 3000). Read AGENTS.md first.' && echo ''",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss"
+      ]
+    }
+  }
+}

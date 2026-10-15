@@ -1,0 +1,31 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Tailwind 4 is deliberately deferred: it raises the browser floor to
+      # Safari 16.4 / Chrome 111 / Firefox 128, and this is a phone-first
+      # tool with no visual tests. Tracking issue, trial diff and the unblock
+      # criteria: https://github.com/practicalsystems/greenwich-utility-watch/issues/20
+      # Remove this rule when that issue is closed.
+      - dependency-name: tailwindcss
+        update-types: ["version-update:semver-major"]
+      # @types/node tracks the Node runtime (24.x on Vercel, CI and the
+      # devcontainer). Bump it by hand when the runtime moves, not before.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions:
+        update-types: [minor, patch]

@@ -1,0 +1,67 @@
+# Supabase CLI configuration for Greenwich Utility Watch.
+# Reference: https://supabase.com/docs/guides/local-development/cli/config
+#
+# This file is intentionally minimal. Every key the CLI needs and that is not
+# listed here falls back to the CLI default (`npx supabase init` prints the full
+# annotated template if you ever need to see those defaults).
+#
+# Linking to the hosted project is a per-machine step, not a config value:
+#   npx supabase link --project-ref <project-ref>
+# See supabase/README.md for the full workflow.
+
+# Distinguishes this project's local containers from other Supabase projects on
+# the same machine. Must not change once set (container names derive from it).
+project_id = "greenwich-utility-watch"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# Must match the hosted project (Postgres 17, verified 2026-10-14).
+major_version = 17
+
+[db.migrations]
+enabled = true
+
+[db.seed]
+# No seed files. The baseline migration seeds the one admin_settings row.
+enabled = false
+
+[storage]
+enabled = true
+# Hosted bucket `submission-photos` has no size limit; this cap applies to the
+# local stack only. The bucket itself is created by the baseline migration
+# (insert into storage.buckets), not declared here, so there is exactly one
+# source of truth for it.
+file_size_limit = "50MiB"
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+# The app does not use Supabase Auth (admin login is a password gate with its
+# own session cookie, see lib/auth.ts and lib/sessions.ts), and it uses no
+# realtime, edge functions, or analytics. Disabling them keeps `supabase start`
+# fast. The `anon` and `authenticated` roles referenced by RLS policies are
+# built into the database image and exist regardless of this setting.
+[auth]
+enabled = false
+
+[realtime]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false
+
+[local_smtp]
+enabled = false

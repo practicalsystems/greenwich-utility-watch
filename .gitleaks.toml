@@ -1,0 +1,34 @@
+# Gitleaks configuration. Run locally with:
+#   gitleaks git --redact --no-banner -c .gitleaks.toml .
+# CI runs the same scan over full history via gitleaks/gitleaks-action (see .github/workflows/ci.yml).
+#
+# The CI action pins gitleaks 8.24.x, which only reads the singular global
+# [allowlist] table; the plural [[allowlists]] form is ignored there. Keep this
+# file on the singular form until the action is bumped.
+
+title = "greenwich-utility-watch"
+
+[extend]
+# Inherit every rule from the default config built into the gitleaks binary.
+useDefault = true
+
+# Known false positives, matched by literal value (never by whole file) so any
+# real secret added to the same files stays detectable.
+#
+# 1. The dummy ADMIN_SECRET fixture used by the session-token unit tests.
+# 2. The worked example from X's public "Creating a signature" documentation,
+#    reproduced by __tests__/lib/social.test.ts to prove the OAuth 1.0a
+#    implementation. Six published test-vector values: consumer key and
+#    secret, token and secret, nonce, and the expected signature.
+[allowlist]
+description = "test fixtures: sessions.test.ts dummy ADMIN_SECRET; X OAuth 1.0a documentation test vector"
+regexTarget = "match"
+regexes = [
+  '''test-secret-32-chars-long-abcdef''',
+  '''xvz1evFS4wEEPTGEFPHBog''',
+  '''kAcSOqF21Fu85e7zjz7ZN2U4ZRhfV3WpwPAoE3Z7kBw''',
+  '''370773112-GmHxMAgYyLbNEtIKZeRNFsMKPR9EyMZeS9weJAEb''',
+  '''LswwdoUaIvS8ltyTt5jkRh4J50vUPVVHtR2YPi5kE''',
+  '''kYjzVBB8Y0ZFabxSWbWovY3uYSQ2pTgmZeNu2VS4cg''',
+  '''hCtSmYh\+iHYCEqBWrE7C7hYmtUk=''',
+]
